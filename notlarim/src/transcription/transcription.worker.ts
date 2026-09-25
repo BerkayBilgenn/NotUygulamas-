@@ -88,15 +88,16 @@ async function transcribe(message: Extract<TranscriptionWorkerRequest, { type: '
   const channels = message.channels.map((buffer) => new Float32Array(buffer))
   try {
     let text: string
-    if (message.platform === 'ios') {
-      text = await runWithDevice(message.recId, channels, message.sampleRate, 'wasm')
-    } else {
+    if (message.platform === 'webgpu') {
       try {
         text = await runWithDevice(message.recId, channels, message.sampleRate, 'webgpu')
       } catch (error) {
         if (errorCode(error) === 'CANCELLED') throw error
-        text = await runWithDevice(message.recId, channels, message.sampleRate, 'wasm')
+        post({ type: 'error', recId: message.recId, code: 'WEBGPU_FAILED' })
+        return
       }
+    } else {
+      text = await runWithDevice(message.recId, channels, message.sampleRate, 'wasm')
     }
     checkCancelled(message.recId)
     post({ type: 'complete', recId: message.recId, text, language: 'tr' })

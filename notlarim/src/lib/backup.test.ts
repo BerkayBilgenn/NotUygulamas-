@@ -93,6 +93,25 @@ describe('yedek', () => {
     })
   })
 
+  it('yedekteki daha yeni transkripti mevcut ses kaydına uygular', async () => {
+    const { t } = await seed()
+    const fileId = await saveFile(t, new Uint8Array([1]).buffer, 'audio/mp4', 'ders-kaydi')
+    await db.recordings.add({
+      id: 'rec-merge', noteId: t, fileId, startedAt: 1, duration: 1000, mime: 'audio/mp4', status: 'done',
+      transcript: { status: 'done', text: 'Yedekteki yeni metin', updatedAt: 20 },
+    })
+    const backup = await buildBackup()
+    await db.recordings.update('rec-merge', {
+      transcript: { status: 'error', error: 'interrupted', updatedAt: 10 },
+    })
+
+    await restoreBackup(backup)
+
+    expect((await db.recordings.get('rec-merge'))?.transcript).toMatchObject({
+      status: 'done', text: 'Yedekteki yeni metin', updatedAt: 20,
+    })
+  })
+
   it('eski (v1) yedekleri de açar', async () => {
     await seed()
     const b = await buildBackup()

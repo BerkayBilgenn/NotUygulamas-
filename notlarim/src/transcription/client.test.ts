@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '../db/db'
 import type { Recording } from '../types'
 import {
@@ -62,6 +62,10 @@ describe('transkripsiyon istemcisi', () => {
       { id: 'file-1', noteId: 'note-1', mime: 'audio/mp4', createdAt: 1, data: new ArrayBuffer(8) },
       { id: 'file-2', noteId: 'note-1', mime: 'audio/mp4', createdAt: 1, data: new ArrayBuffer(8) },
     ])
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('masaüstü kimliği kullanan iPadOS cihazını WASM yolu olarak tanır', () => {
@@ -131,5 +135,43 @@ describe('transkripsiyon istemcisi', () => {
     await expect(job).rejects.toThrow('CANCELLED')
     expect((await db.recordings.get(r1.id))?.transcript).toMatchObject({ status: 'error', error: 'cancelled' })
     expect(worker.terminated).toBe(true)
+  })
+
+  it('WebGPU hatasında yeni Worker ile WASM olarak bir kez baştan dener', async () => {
+    const gpuWorker = new FakeWorker()
+    const wasmWorker = new FakeWorker()
+    const workers = [gpuWorker, wasmWorker]
+    const createWorker = () => workers.shift()!
+    gpuWorker.onPost = (message) => {
+      if (message.type === 'transcribe') gpuWorker.emit({ type: 'error', recId: r1.id, code: 'WEBGPU_FAILED' })
+    }
+    wasmWorker.onPost = (message) => {
+      if (message.type === 'transcribe') wasmWorker.emit({ type: 'complete', recId: r1.id, text: 'WASM sonucu' })
+    }
+
+    await startTranscription(r1, { createWorker, decodeAudio: async () => decoded })
+
+    expect(gpuWorker.terminated).toBe(true)
+    expect(wasmWorker.posted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'transcribe', platform: 'wasm' }),
+    ]))
+    expect((await db.recordings.get(r1.id))?.transcript).toMatchObject({ status: 'done', text: 'WASM sonucu' })
+  })
+
+  it('IndexedDB yazımı reddedilirse işi serbest bırakıp sonraki kayda izin verir', async () => {
+    vi.spyOn(db.recordings, 'update').mockRejectedValueOnce(new Error('quota'))
+    const failed = startTranscription(r1, options(new FakeWorker()))
+    const outcome = await Promise.race([
+      failed.then(() => 'resolved', () => 'rejected'),
+      new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 80)),
+    ])
+
+    expect(outcome).toBe('rejected')
+
+    const nextWorker = new FakeWorker()
+    nextWorker.onPost = (message) => {
+      if (message.type === 'transcribe') nextWorker.emit({ type: 'complete', recId: r2.id, text: 'sonraki iş' })
+    }
+    await expect(startTranscription(r2, options(nextWorker))).resolves.toBeUndefined()
   })
 })

@@ -159,7 +159,11 @@ export async function restoreBackup(file: BackupFile): Promise<RestoreResult> {
       if (!(await db.files.get(f.id))) await db.files.add(f)
     }
     for (const r of file.data.recordings ?? []) {
-      if (!(await db.recordings.get(r.id))) await db.recordings.add({ ...r, status: 'done' })
+      const existing = await db.recordings.get(r.id)
+      if (!existing) await db.recordings.add({ ...r, status: 'done' })
+      else if (r.transcript && (!existing.transcript || r.transcript.updatedAt > existing.transcript.updatedAt)) {
+        await db.recordings.update(r.id, { transcript: r.transcript })
+      }
     }
     for (const incoming of notes) {
       // Older or hand-edited backups may miss optional fields; fill them in.

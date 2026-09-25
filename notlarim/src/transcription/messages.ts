@@ -1,4 +1,4 @@
-export type TranscriptionPlatform = 'ios' | 'webgpu'
+export type TranscriptionPlatform = 'ios' | 'webgpu' | 'wasm'
 
 export type TranscriptionWorkerRequest =
   | {

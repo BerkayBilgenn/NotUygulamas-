@@ -102,15 +102,17 @@ export function startTranscription(recording: Recording, options: TranscriptionC
   const decodeAudio = options.decodeAudio ?? defaultDecodeAudio
   const isOnline = options.isOnline ?? (() => typeof navigator === 'undefined' || navigator.onLine)
   const now = options.now ?? Date.now
-  const worker = createWorker()
+  let worker = createWorker()
   let settled = false
+  let retriedWithWasm = false
+  let storedAudio: ArrayBuffer | null = null
   let lastProgressWrite = -Infinity
   let writes = Promise.resolve()
-  let resolveJob: () => void
-  let rejectJob: (error: Error) => void
+  let resolveJob!: () => void
+  let rejectJob!: (error: Error) => void
 
   const writeTranscript = (transcript: Recording['transcript']) => {
-    writes = writes.then(async () => {
+    writes = writes.catch(() => {}).then(async () => {
       await db.recordings.update(recording.id, { transcript })
     })
     return writes
@@ -119,78 +121,119 @@ export function startTranscription(recording: Recording, options: TranscriptionC
   const fail = async (code: string) => {
     if (settled) return
     settled = true
-    await writeTranscript({ status: 'error', error: mapError(code, isOnline), updatedAt: now() })
-    rejectJob(new Error(code))
+    try {
+      await writeTranscript({ status: 'error', error: mapError(code, isOnline), updatedAt: now() })
+    } catch {
+      // A storage failure must not leave the singleton job locked forever.
+    } finally {
+      rejectJob(new Error(code))
+    }
   }
 
   const complete = async (message: Extract<TranscriptionWorkerResponse, { type: 'complete' }>) => {
     if (settled) return
     settled = true
-    await writeTranscript({
-      status: 'done',
-      text: message.text.trim(),
-      language: message.language,
-      updatedAt: now(),
+    try {
+      await writeTranscript({
+        status: 'done',
+        text: message.text.trim(),
+        language: message.language,
+        updatedAt: now(),
+      })
+      resolveJob()
+    } catch {
+      rejectJob(new Error('TRANSCRIPT_SAVE_FAILED'))
+    }
+  }
+
+  const postAudio = async (targetPlatform: TranscriptionPlatform) => {
+    if (!storedAudio) throw new Error('AUDIO_DECODE_FAILED')
+    const decoded = await decodeAudio(storedAudio)
+    if (settled) return
+    const channels = decoded.channels.map((channel) => new Float32Array(channel).buffer as ArrayBuffer)
+    worker.postMessage(
+      { type: 'transcribe', recId: recording.id, channels, sampleRate: decoded.sampleRate, platform: targetPlatform },
+      channels,
+    )
+  }
+
+  const retryWithWasm = async () => {
+    if (retriedWithWasm || settled) return fail('UNKNOWN')
+    retriedWithWasm = true
+    worker.onmessage = null
+    worker.onerror = null
+    worker.terminate()
+    try {
+      worker = createWorker()
+      attachWorker()
+      setJobState({ recId: recording.id, phase: 'preparing', progress: 0 })
+      await postAudio('wasm')
+    } catch {
+      await fail('AUDIO_DECODE_FAILED')
+    }
+  }
+
+  const onWorkerMessage = (event: MessageEvent<TranscriptionWorkerResponse>) => {
+    const message = event.data
+    if (message.recId !== recording.id || settled) return
+    if (message.type === 'complete') {
+      void complete(message)
+      return
+    }
+    if (message.type === 'error') {
+      if (message.code === 'WEBGPU_FAILED' && !retriedWithWasm) void retryWithWasm()
+      else void fail(message.code)
+      return
+    }
+    if (message.type === 'cancelled') {
+      void fail('CANCELLED')
+      return
+    }
+    if (message.type === 'ready') {
+      setJobState({ recId: recording.id, phase: 'transcribing', progress: 0 })
+      return
+    }
+
+    const progress = Math.max(0, Math.min(100, Math.round(message.progress)))
+    setJobState({
+      recId: recording.id,
+      phase: message.type === 'model-progress' ? 'model' : 'transcribing',
+      progress,
     })
-    resolveJob()
+    const timestamp = now()
+    if (timestamp - lastProgressWrite >= 1000) {
+      lastProgressWrite = timestamp
+      void writeTranscript({ status: 'processing', progress, updatedAt: timestamp }).catch(() => {})
+    }
+  }
+
+  function attachWorker() {
+    worker.onmessage = onWorkerMessage
+    worker.onerror = () => {
+      if (!retriedWithWasm && platform() === 'webgpu') void retryWithWasm()
+      else void fail('UNKNOWN')
+    }
   }
 
   const promise = new Promise<void>((resolve, reject) => {
     resolveJob = resolve
     rejectJob = reject
-
-    worker.onmessage = (event) => {
-      const message = event.data
-      if (message.recId !== recording.id || settled) return
-      if (message.type === 'complete') {
-        void complete(message)
-        return
-      }
-      if (message.type === 'error') {
-        void fail(message.code)
-        return
-      }
-      if (message.type === 'cancelled') {
-        void fail('CANCELLED')
-        return
-      }
-      if (message.type === 'ready') {
-        setJobState({ recId: recording.id, phase: 'transcribing', progress: 0 })
-        return
-      }
-
-      const progress = Math.max(0, Math.min(100, Math.round(message.progress)))
-      setJobState({
-        recId: recording.id,
-        phase: message.type === 'model-progress' ? 'model' : 'transcribing',
-        progress,
-      })
-      const timestamp = now()
-      if (timestamp - lastProgressWrite >= 1000) {
-        lastProgressWrite = timestamp
-        void writeTranscript({ status: 'processing', progress, updatedAt: timestamp })
-      }
-    }
-
-    worker.onerror = () => {
-      void fail('UNKNOWN')
-    }
+    attachWorker()
 
     void (async () => {
       try {
         await writeTranscript({ status: 'processing', progress: 0, updatedAt: now() })
+      } catch {
+        await fail('STORAGE_FAILED')
+        return
+      }
+      try {
         const storedFile = recording.fileId ? await db.files.get(recording.fileId) : undefined
         if (!storedFile) throw new Error('AUDIO_DECODE_FAILED')
-        const decoded = await decodeAudio(storedFile.data)
-        if (settled) return
-        const channels = decoded.channels.map((channel) => new Float32Array(channel).buffer as ArrayBuffer)
-        worker.postMessage(
-          { type: 'transcribe', recId: recording.id, channels, sampleRate: decoded.sampleRate, platform: platform() },
-          channels,
-        )
-      } catch (error) {
-        const code = error instanceof Error && error.message === 'AUDIO_DECODE_FAILED' ? error.message : 'AUDIO_DECODE_FAILED'
-        await fail(code)
+        storedAudio = storedFile.data
+        await postAudio(platform())
+      } catch {
+        await fail('AUDIO_DECODE_FAILED')
       }
     })()
   })
