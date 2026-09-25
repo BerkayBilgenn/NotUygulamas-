@@ -59,6 +59,18 @@ export default defineConfig(({ mode }) => ({
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // The large ONNX/WASM runtime stays lazy, then becomes available offline after first use.
+        // Hugging Face model weights use Transformers.js' own Cache API cache and are never precached here.
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/ort-.*\.wasm$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'transcription-runtime',
+              expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
       },
     }),
   ],

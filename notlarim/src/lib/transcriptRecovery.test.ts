@@ -31,4 +31,27 @@ describe('transkript kurtarma', () => {
       error: 'interrupted',
     })
   })
+
+  it('yalnızca işlenen transkripti kurtarır ve tekrar çalıştırıldığında değişiklik yapmaz', async () => {
+    const completed: Recording = {
+      ...doneRecording,
+      id: 'rec-completed',
+      transcript: { status: 'done', text: 'Hazır metin', language: 'tr', updatedAt: 3 },
+    }
+    const failed: Recording = {
+      ...doneRecording,
+      id: 'rec-failed',
+      transcript: { status: 'error', error: 'offline', updatedAt: 4 },
+    }
+    await db.recordings.bulkAdd([
+      completed,
+      failed,
+      { ...doneRecording, transcript: { status: 'processing', progress: 80, updatedAt: 5 } },
+    ])
+
+    expect(await recoverInterruptedTranscripts()).toBe(1)
+    expect((await db.recordings.get(completed.id))?.transcript).toEqual(completed.transcript)
+    expect((await db.recordings.get(failed.id))?.transcript).toEqual(failed.transcript)
+    expect(await recoverInterruptedTranscripts()).toBe(0)
+  })
 })

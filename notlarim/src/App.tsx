@@ -7,6 +7,7 @@ import { createDrawingNote, createPdfNote, createTextNote } from './db/repo'
 import { showToast } from './lib/events'
 import { pickFile } from './lib/files'
 import { recoverRecordings } from './lib/recorder'
+import { recoverInterruptedTranscripts } from './lib/transcriptRecovery'
 import { RecordingPlayer } from './ui/RecordingPlayer'
 import { usePersisted } from './state/settings'
 import type { DrawMode, NoteType, PaperStyle } from './types'
@@ -44,6 +45,9 @@ export default function App() {
   useEffect(() => {
     recoverRecordings()
       .then((n) => n && showToast(`${n} yarım kalan ses kaydı kurtarıldı`, 'success', 6000))
+      .catch(() => {})
+    recoverInterruptedTranscripts()
+      .then((n) => n && showToast(`${n} yarım kalan transkript yeniden denenebilir duruma getirildi`, 'info', 6000))
       .catch(() => {})
   }, [])
 

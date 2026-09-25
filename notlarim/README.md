@@ -52,6 +52,10 @@ Sonraki her `git push` otomatik yeni sürüm yayınlar. Uygulama açıkken yeni 
 - Slaytlarda arama: PDF defterinde üst bardaki büyüteç. Kenar çubuğundaki arama da slayt yazılarını tarar.
 - Şekiller: araç çubuğundaki ok ikonu; tekrar dokununca çizgi / ok / dikdörtgen / elips seçilir.
 - Ders kaydı: üst bardaki mikrofon. Kayıt sırasında yazdıkların kayda bağlanır; sonra kaydı açıp "Nota dokun" ile bir satıra veya çizgiye dokununca o an çalar.
+- Ses transkripti: mikrofon menüsündeki tamamlanmış bir kaydın altında **Transkript oluştur**'a dokun. İlk kullanımda yaklaşık 60–100 MB'lık çok dilli model indirilir; ses ve üretilen metin yalnızca cihazında işlenir ve saklanır.
+- İlk model indirmesinden sonra transkript çevrimdışı çalışır. Model henüz indirilmediyse ilk kurulum için bir kez internete bağlanman gerekir.
+- iPad'de yazıya çevirme kayıt süresinden daha uzun sürebilir. İşlem sürerken not yazmaya ve çizmeye devam edebilir, **İptal** ile durdurup daha sonra tekrar deneyebilirsin.
+- Yazılı notlarda tamamlanan transkripti **Nota ekle** ile tek ve geri alınabilir bir düzenleme olarak ekleyebilirsin. Çizim notlarında metin ses kaydında kalır; **Kopyala** ile başka yere aktarılabilir.
 
 ## Gerçek iPad'de kontrol listesi
 
@@ -68,6 +72,7 @@ Otomatik testler tarayıcı emülasyonunda çalışıyor; şunları gerçek iPad
 - [ ] Kement ile seçip kalemle ve parmakla taşınabiliyor
 - [ ] Ders kaydı 45+ dakika sorunsuz sürüyor, sonra nota dokununca doğru ana gidiyor
 - [ ] Kayıt sırasında uygulamadan çıkıp dönünce kaydedilen kısım duruyor
+- [ ] Kısa bir kaydı çevrimiçiyken yazıya çevir; uygulamayı kapat, uçak modunu aç, ana ekran ikonundan yeniden aç ve ikinci kısa kaydı çevrimdışı yazıya çevir
 - [ ] "PDF olarak paylaş" ile WhatsApp'a ve Dosyalar'a gönderilebiliyor, Yazdır görünüyor
 - [ ] Slaytlarda arama gerçek ders PDF'lerinde sonuç buluyor
 
