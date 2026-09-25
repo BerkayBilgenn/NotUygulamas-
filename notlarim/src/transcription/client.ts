@@ -70,9 +70,21 @@ async function defaultDecodeAudio(data: ArrayBuffer): Promise<DecodedAudio> {
   }
 }
 
+interface NavigatorIdentity {
+  userAgent: string
+  platform?: string
+  maxTouchPoints?: number
+}
+
+export function detectTranscriptionPlatform(identity: NavigatorIdentity): TranscriptionPlatform {
+  const iPadDesktopMode = identity.platform === 'MacIntel' && (identity.maxTouchPoints ?? 0) > 1
+  return /iPad|iPhone|iPod/.test(identity.userAgent) || iPadDesktopMode ? 'ios' : 'webgpu'
+}
+
 function platform(): TranscriptionPlatform {
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  return /iPad|iPhone|iPod/.test(userAgent) ? 'ios' : 'webgpu'
+  return detectTranscriptionPlatform(typeof navigator === 'undefined'
+    ? { userAgent: '' }
+    : navigator)
 }
 
 function mapError(code: string, isOnline: () => boolean): TranscriptErrorCode {

@@ -12,13 +12,14 @@ import { Superscript } from '@tiptap/extension-superscript'
 import { Timestamps, setReplayWindow } from './Timestamps'
 import { db } from '../db/db'
 import { saveFile, saveText } from '../db/repo'
-import { showToast } from '../lib/events'
+import { showToast, transcriptInsertBus, type TranscriptInsertDetail } from '../lib/events'
 import { prepareImage } from '../lib/files'
 import { registerFlush } from '../lib/flush'
 import { seekToWritten, usePlayback } from '../lib/playback'
 import { NoteImage } from './ImageNode'
 import { useSettings } from '../state/settings'
 import type { NoteMeta } from '../types'
+import { buildTranscriptContent } from '../transcription/insert'
 import { TextToolbar } from './TextToolbar'
 
 export function TextEditor({ note }: { note: NoteMeta }) {
@@ -118,6 +119,17 @@ function TextEditorInner({ noteId, initialDoc }: { noteId: string; initialDoc: J
   useEffect(() => {
     editorRef.current = editor
   }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    const insertTranscript = (event: Event) => {
+      const { noteId: targetNoteId, text, startedAt } = (event as CustomEvent<TranscriptInsertDetail>).detail
+      if (targetNoteId !== noteId) return
+      editor.chain().focus('end').insertContent(buildTranscriptContent(text, startedAt)).run()
+    }
+    transcriptInsertBus.addEventListener('insert', insertTranscript)
+    return () => transcriptInsertBus.removeEventListener('insert', insertTranscript)
+  }, [editor, noteId])
 
   useEffect(() => registerFlush(() => flushRef.current()), [])
 

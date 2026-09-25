@@ -32,7 +32,7 @@ async function loadModel(recId: string, device: 'webgpu' | 'wasm'): Promise<Tran
     device,
     dtype: device === 'webgpu' ? 'fp16' : 'q8',
     progress_callback: (event: ProgressInfo) => {
-      if ('progress' in event && typeof event.progress === 'number') {
+      if (event.status === 'progress_total') {
         post({ type: 'model-progress', recId, progress: event.progress })
       }
     },

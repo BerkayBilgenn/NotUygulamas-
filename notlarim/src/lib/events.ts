@@ -37,3 +37,12 @@ export function dismissToast(id: number) {
 
 /** Fired after a note is written to the database. */
 export const savedBus = new EventTarget()
+
+export interface TranscriptInsertDetail {
+  noteId: string
+  text: string
+  startedAt: number
+}
+
+/** Requests one undoable transcript insertion in the currently open text editor. */
+export const transcriptInsertBus = new EventTarget()

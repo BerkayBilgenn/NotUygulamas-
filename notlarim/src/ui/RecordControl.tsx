@@ -7,6 +7,7 @@ import { openRecording } from '../lib/playback'
 import { formatDuration, recordingSupported, startRecording, stopRecording, useRecorder } from '../lib/recorder'
 import type { NoteMeta } from '../types'
 import { useClickOutside } from './hooks'
+import { RecordingTranscript } from './RecordingTranscript'
 
 export function RecordControl({ note }: { note: NoteMeta }) {
   const r = useRecorder()
@@ -66,32 +67,35 @@ export function RecordControl({ note }: { note: NoteMeta }) {
               <ul className="rec-list">
                 {done.map((x) => (
                   <li key={x.id}>
-                    <button
-                      className="rec-item"
-                      onClick={() => {
-                        setOpen(false)
-                        void openRecording(x)
-                      }}
-                    >
-                      <Headphones size={16} />
-                      <span>
-                        {new Date(x.startedAt).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="muted">{formatDuration(x.duration)}</span>
-                    </button>
-                    <button
-                      className="icon-btn small danger"
-                      aria-label="Kaydı sil"
-                      onClick={async () => {
-                        if (!confirm('Bu ses kaydı silinsin mi? Notun kendisi silinmez.')) return
-                        await db.transaction('rw', db.recordings, db.files, async () => {
-                          await db.recordings.delete(x.id)
-                          if (x.fileId) await db.files.delete(x.fileId)
-                        })
-                      }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="rec-row">
+                      <button
+                        className="rec-item"
+                        onClick={() => {
+                          setOpen(false)
+                          void openRecording(x)
+                        }}
+                      >
+                        <Headphones size={16} />
+                        <span>
+                          {new Date(x.startedAt).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="muted">{formatDuration(x.duration)}</span>
+                      </button>
+                      <button
+                        className="icon-btn small danger"
+                        aria-label="Kaydı sil"
+                        onClick={async () => {
+                          if (!confirm('Bu ses kaydı silinsin mi? Notun kendisi silinmez.')) return
+                          await db.transaction('rw', db.recordings, db.files, async () => {
+                            await db.recordings.delete(x.id)
+                            if (x.fileId) await db.files.delete(x.fileId)
+                          })
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <RecordingTranscript recording={x} noteType={note.type} />
                   </li>
                 ))}
               </ul>

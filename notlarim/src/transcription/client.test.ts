@@ -4,6 +4,7 @@ import { db } from '../db/db'
 import type { Recording } from '../types'
 import {
   cancelTranscription,
+  detectTranscriptionPlatform,
   startTranscription,
   type TranscriptionClientOptions,
   type TranscriptionWorker,
@@ -61,6 +62,14 @@ describe('transkripsiyon istemcisi', () => {
       { id: 'file-1', noteId: 'note-1', mime: 'audio/mp4', createdAt: 1, data: new ArrayBuffer(8) },
       { id: 'file-2', noteId: 'note-1', mime: 'audio/mp4', createdAt: 1, data: new ArrayBuffer(8) },
     ])
+  })
+
+  it('masaüstü kimliği kullanan iPadOS cihazını WASM yolu olarak tanır', () => {
+    expect(detectTranscriptionPlatform({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+      platform: 'MacIntel',
+      maxTouchPoints: 5,
+    })).toBe('ios')
   })
 
   it('ikinci eşzamanlı işi reddeder', async () => {
