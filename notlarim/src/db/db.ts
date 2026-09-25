@@ -32,6 +32,8 @@ export class NotesDB extends Dexie {
       audiochunks: '++id, recId',
       pdftext: 'noteId',
     })
+    // v4: recordings can carry an embedded offline transcript (no new indexes).
+    this.version(4).stores({})
   }
 }
 

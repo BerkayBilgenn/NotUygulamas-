@@ -69,6 +69,30 @@ describe('yedek', () => {
     expect(Array.from(new Uint8Array((await db.files.get(fileId))!.data))).toEqual([9, 9, 9])
   })
 
+  it('tamamlanmış transkripti ses kaydıyla yedekler', async () => {
+    const { t } = await seed()
+    const fileId = await saveFile(t, new Uint8Array([1, 2, 3]).buffer, 'audio/mp4', 'ders-kaydi')
+    await db.recordings.add({
+      id: 'rec-transcript',
+      noteId: t,
+      fileId,
+      startedAt: 1,
+      duration: 1000,
+      mime: 'audio/mp4',
+      status: 'done',
+      transcript: { status: 'done', text: 'Mitokondri enerji üretir.', language: 'tr', updatedAt: 2 },
+    })
+
+    const restored = parseBackup(JSON.stringify(await buildBackup()))
+
+    expect(restored.version).toBe(4)
+    expect(restored.data.recordings?.[0].transcript).toMatchObject({
+      status: 'done',
+      text: 'Mitokondri enerji üretir.',
+      language: 'tr',
+    })
+  })
+
   it('eski (v1) yedekleri de açar', async () => {
     await seed()
     const b = await buildBackup()

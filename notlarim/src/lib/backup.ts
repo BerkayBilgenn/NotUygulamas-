@@ -1,8 +1,8 @@
 import { db } from '../db/db'
-import type { DrawingContent, Folder, NoteMeta, Recording, StoredFile, TextContent } from '../types'
+import type { DrawingContent, Folder, NoteMeta, Recording, StoredFile, TextContent, TranscriptErrorCode } from '../types'
 
-/** v2 adds `files` (PDFs, images, audio as base64), v3 adds `recordings`. Older files still import. */
-export const BACKUP_VERSION = 3
+/** v2 adds files, v3 recordings, and v4 embedded offline transcripts. Older files still import. */
+export const BACKUP_VERSION = 4
 
 export interface BackupFileEntry {
   id: string
@@ -62,6 +62,14 @@ export class BackupError extends Error {}
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0
+const transcriptErrors = new Set<TranscriptErrorCode>(['model', 'decode', 'memory', 'cancelled', 'interrupted', 'offline', 'unknown'])
+
+function isTranscript(v: unknown): boolean {
+  if (!isObj(v) || typeof v.updatedAt !== 'number') return false
+  if (v.status === 'processing') return typeof v.progress === 'number' && v.progress >= 0 && v.progress <= 100
+  if (v.status === 'done') return typeof v.text === 'string' && (v.language === undefined || typeof v.language === 'string')
+  return v.status === 'error' && typeof v.error === 'string' && transcriptErrors.has(v.error as TranscriptErrorCode)
+}
 
 /** Validates the whole file before anything is written. Throws BackupError with a user-facing message. */
 export function parseBackup(raw: string): BackupFile {
@@ -102,6 +110,9 @@ export function parseBackup(raw: string): BackupFile {
     for (const r of d.recordings as unknown[]) {
       if (!isObj(r) || !isStr(r.id) || !isStr(r.noteId) || typeof r.startedAt !== 'number') {
         throw new BackupError('Yedek dosyasındaki ses kayıtları bozuk, hiçbir şey değiştirilmedi.')
+      }
+      if (r.transcript !== undefined && !isTranscript(r.transcript)) {
+        throw new BackupError('Yedek dosyasındaki ses transkriptleri bozuk, hiçbir şey değiştirilmedi.')
       }
     }
   }

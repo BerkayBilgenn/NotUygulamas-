@@ -95,6 +95,13 @@ export interface MetaEntry {
   value: unknown
 }
 
+export type TranscriptErrorCode = 'model' | 'decode' | 'memory' | 'cancelled' | 'interrupted' | 'offline' | 'unknown'
+
+export type RecordingTranscript =
+  | { status: 'processing'; progress: number; updatedAt: number }
+  | { status: 'done'; text: string; language?: string; updatedAt: number }
+  | { status: 'error'; error: TranscriptErrorCode; updatedAt: number }
+
 export interface Recording {
   id: string
   noteId: string
@@ -106,6 +113,7 @@ export interface Recording {
   mime: string
   status: 'recording' | 'done'
   lastChunkAt?: number
+  transcript?: RecordingTranscript
 }
 
 /** Audio arrives in small pieces while recording, so a crash loses seconds, not the lecture. */
